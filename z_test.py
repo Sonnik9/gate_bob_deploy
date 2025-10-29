@@ -1,28 +1,17 @@
-from a_config import *
-from b_context import BotContext
-from c_log import ErrorHandler, log_time
-from typing import *
 import re
-from typing import Optional, Tuple, Set
-from aiogram import Dispatcher, types, F
+from typing import Tuple, Set
 
 
-# Базовый словарь: пара символов (латиница, кириллица)
+# ==== вставляем сокращённый класс TgParser без зависимостей ====
 CHAR_PAIRS = {
     "a": "а", "e": "е", "o": "о", "p": "р", "c": "с", "y": "у", "x": "х",
     "A": "А", "B": "В", "E": "Е", "K": "К", "M": "М", "H": "Н", "O": "О",
     "P": "Р", "C": "С", "T": "Т", "X": "Х",
 }
-
 LATIN_TO_CYR = CHAR_PAIRS
 CYR_TO_LATIN = {v: k for k, v in CHAR_PAIRS.items()}
 
-
 class TgParser:
-    def __init__(self, info_handler: ErrorHandler):    
-        info_handler.wrap_foreign_methods(self)
-        self.info_handler = info_handler
-
     @staticmethod
     def clean_whitespace(text: str) -> str:
         return " ".join(word.strip() for word in text.split())
@@ -85,7 +74,7 @@ class TgParser:
 
         text_lower = text_joined.lower()
         result["force_limit"] = "#limit" in text_lower
-        result["half_margin"] = any(x in text_lower for x in ["1/2 size", "1\2 size", "0.5% size", "1\\2 size", "1\\2 size", "0.5 size", "half size", "половина позиции", "половина маржи"])
+        result["half_margin"] = any(x in text_lower for x in ["1/2 size", "0.5% size", "1\\2 size", "0.5 size", "half size", "половина позиции", "половина маржи"])
 
         base_symbol = self.cyr_to_latin(result["symbol"]).upper()
         if not base_symbol:
@@ -96,57 +85,49 @@ class TgParser:
         return result, all_present
 
 
-class TgBotWatcherAiogram(TgParser):
+# ==== тестовые кейсы ====
+test_messages = [
+    """⏺️Trading pair : ETH / USDT 
+    LONG X10 
+    Entry price: 3832
+    Stop Loss: 3800
+    Take Profit1: 3935
+    Take Profit2: 3982
+    1/2 size""",
+
+    """Trading pair : CRO / USDT 
+    LONG X10 
+    1/2 size
+    Entry price: 0.153
+    Stop-loss: 0.1433
+    Take profit1: 0.1879""",
+
+    """Trading pair: BTC / USDT
+    SHORT X15
+    Entry price - 66500
+    Stop loss - 67200
+    Take profit1 - 64000
+    #limit""",
+    """Trading pair 4/USDT
+    long
+    Х10
+    Entry price: 0.102
+    Take profit 1: 0.12
+    Stop-loss: 0.07
+    """,
+    """Trading pair 4/USDT
+    long
+    Х10
+    Entry price: 0.096
+    Take profit: 0.11
+    Stop-loss: 0.07
     """
-    Отслеживает сообщения из Telegram-канала через aiogram-хендлеры.
-    Фильтрует по тегам из self.tags_set.
-    """
+]
 
-    def __init__(
-        self,
-        dp: Dispatcher,
-        channel_id: int,
-        tags_set: Set[str],
-        context: BotContext,
-        info_handler: ErrorHandler,
-        max_cache: int = 20
-    ):
-        super().__init__(info_handler)
-        self.dp = dp
-        self.channel_id = channel_id
-        self.tags_set: Set[str] = {x.lower().strip() for x in tags_set if x}
-        self.message_cache = context.message_cache
-        self.stop_bot = context.stop_bot
-        self._seen_messages: Set[int] = set()
-        self.max_cache: int = max_cache
-
-    def register_handlers(self):
-        """
-        Регистрирует все channel_post обработчики через Dispatcher.
-        """
-        @self.dp.channel_post()
-        # @self.dp.channel_post(F.chat.id == self.channel_id)
-        async def channel_post_handler(message: types.Message):
-            try:
-                if not message.text:
-                    print(f"Нет сообщений для парсинга либо права доступа ограничены. {log_time()}")
-                    return
-
-                msg_text = message.text.lower()
-                matched_tag = next((tag for tag in self.tags_set if tag in msg_text), None)
-                if not matched_tag:
-                    return
-
-                ts_ms = int(message.date.timestamp() * 1000)
-                if ts_ms in self._seen_messages:
-                    return
-
-                self._seen_messages.add(ts_ms)
-                self.message_cache.append((matched_tag, message.text, ts_ms))
-
-                if len(self.message_cache) > self.max_cache:
-                    self.message_cache = self.message_cache[-self.max_cache:]
-                    self._seen_messages.clear()
-
-            except Exception as e:
-                self.info_handler.debug_error_notes(f"[watch_channel error] {e}", is_print=True)
+parser = TgParser()
+for i, msg in enumerate(test_messages, start=1):
+    result, ok = parser.parse_tg_message(msg, tag="trading pair")
+    print(f"\n=== Test {i} ===")
+    print(msg)
+    print("Parsed:", result)
+    print("All mandatory present:", ok)

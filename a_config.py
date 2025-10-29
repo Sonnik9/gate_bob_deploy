@@ -4,8 +4,9 @@ from typing import *
 TEG_ANCHOR_SET: Set = {"#soft", "trading pair", } # --------------------------  # теги целевых сообщений. СТАТИКА
 
 # --- SECRETS CONFIG ---                 
-# TG_BOT_TOKEN: str = "8190920390:AAE09pWhSVguG0iiBNIztM2Pe8zECPV4vSg" # токен тг бота old
-TG_BOT_TOKEN: str = "7950631691:AAFntHbnAJlKcaTkypXTw2lVPWagiz3b_ak"
+# TG_BOT_TOKEN: str = "8190920390:AAE09pWhSVguG0iiBNIztM2Pe8zECPV4vSg" # токен тг бота old fin klient
+# TG_BOT_TOKEN: str = "7950631691:AAFntHbnAJlKcaTkypXTw2lVPWagiz3b_ak" # токен тг бота2 old fin klient
+BOT_TOKEN: str = "8344277656:AAE6BdsqUY7So0oO2iX8B3e0G2w6FHw8D8E" # -- токен бота2 my (test)
 
 
 # -- UTILS ---
@@ -38,8 +39,10 @@ EMO_ORDER_FILLED: str = "🤞"
 INIT_USER_CONFIG = {
     "config": {
         "GATE": {
-            "api_key": "",
-            "api_secret": "",
+            # "api_key": "",
+            # "api_secret": "",
+            "api_key": "925d3d629038c1c57655a5dac692911d",
+            "api_secret": "d63ed01fca8cfb1a28507de3a96617e2362591725a355315fec060b3595022e3",
         },
         "fin_settings": {
             "trading pair": {

@@ -257,7 +257,7 @@ class Utils:
         tp2_price = safe_float(parsed_msg.get("take_profit2"))
 
         # dop_tp — процент от расстояния до TP1
-        if tp1_price and dop_tp:
+        if tp1_price and dop_tp and not tp2_price:
             sign = 1 if pos_side.upper() == "LONG" else -1
             try:
                 distance = abs(tp1_price - entry_price)
