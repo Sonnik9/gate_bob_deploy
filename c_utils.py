@@ -268,7 +268,7 @@ class Utils:
                 return []
 
         # === Формируем финальный список ===
-        prices = [p for p in (tp1_price, tp2_price) if isinstance(p, (int, float))]
+        prices = [p for p in (tp1_price, tp2_price) if isinstance(p, (int, float)) and p]
 
         if not prices:
             return []

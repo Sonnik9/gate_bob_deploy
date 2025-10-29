@@ -316,6 +316,7 @@ class Core:
             pos_side=pos_side,
             entry_price=entry_price
         )
+        # print("take_profits:")
         # print(take_profits)
         if not take_profits:
             record["tp1_status"] = "Invalid data"
@@ -347,7 +348,7 @@ class Core:
             if risk_tp_ok_status != "ok":
                 record["entry_status"] = risk_tp_ok_status
 
-        if record["entry_status"] != "waiting":
+        if record["entry_status"] != "waiting" or record.get("tp1_status") == "Invalid data":
             async with self.context.queues_msg_lock:
                 current_anchor["last_data"] = record
 
