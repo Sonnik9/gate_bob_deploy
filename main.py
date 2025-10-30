@@ -493,6 +493,7 @@ class Core:
         while not self.context.stop_bot_iteration and not self.context.stop_bot:
             try:
                 signal_tasks_val = self.context.message_cache[-SIGNAL_PROCESSING_LIMIT:] if self.context.message_cache else None
+                print(signal_tasks_val)
                 if not signal_tasks_val:
                     await asyncio.sleep(MAIN_CYCLE_FREQUENCY)
                     continue
@@ -513,7 +514,7 @@ class Core:
                         continue
                     self.context.tg_timing_cache.add(msg_key)
 
-                    parsed_msg, all_present = self.tg_watcher.parse_tg_message(message=message, tag=matched_tag)
+                    parsed_msg, all_present = self.tg_watcher.parse_tg_message(message=message, tag="matched_tag")
                     print(f"[DEBUG] Parse msg: {parsed_msg}")
                     if not all_present:
                         print(f"[DEBUG] Parse error: {parsed_msg}")
