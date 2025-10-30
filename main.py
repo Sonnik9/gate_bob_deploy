@@ -104,16 +104,6 @@ class TelegramHandlerRegistry:
         self.notifier = notifier
         self.tg_watcher = tg_watcher
 
-    # def register_all(self):
-    #     # ===== 1. Сначала watcher канала =====
-    #     self.tg_watcher.register_handlers()
-
-    #     # ===== 2. Специфичные хендлеры интерфейса =====
-    #     self.interface.register_handlers()
-
-    #     # ===== 3. Глобальный handler Notifier =====
-    #     self.notifier.register_handlers()
-
     def register_all(self):
         # ===== 1. Сначала watcher канала =====
         self.tg_watcher.register_handlers()
@@ -136,6 +126,8 @@ class Core:
         self.tg_interface = None
         self.positions_task = None
         self.instruments_data = {}
+        self._semantic_seen: dict[str, float] = {}
+        self._semantic_ttl = 5.0  # сек — блокируем одинаковый сигнал на 10 секунд
 
     async def _start_user_context(self, chat_id: int):
         """Инициализация юзер-контекста (сессии, клиентов, стримов и контролов)"""
@@ -195,7 +187,6 @@ class Core:
         # start_time = last_timestamp / 1000
         start_time = time.time()
         timeout = fin_settings.get("order_timeout", 30)
-        pos_data["pending_open"] = True
         try:
             print(f"wait for cancel intil {timeout} sec")
             while (time.time() - start_time) < timeout and not self.context.stop_bot and not self.context.stop_bot_iteration:
@@ -256,7 +247,7 @@ class Core:
                 pos_data["order_id"] = None
         
         finally:
-            pos_data["pending_open"] = False
+            
             async with self.context.queues_msg_lock:
                 current_anchor = self.context.order_status_book.get(chat_id, {}).get((symbol, pos_side))
                 current_anchor["last_data"] = record
@@ -271,10 +262,12 @@ class Core:
                 )        
 
     async def complete_signal_task(self, chat_id: str, fin_settings: dict, parsed_msg: dict, context_vars: dict, last_timestamp: int, cur_price: float):
+        
         symbol = parsed_msg.get("symbol")
         pos_side = parsed_msg.get("pos_side")
         symbol_data = context_vars[symbol]
         pos_data = symbol_data[pos_side]
+        pos_data["pending_open"] = True
 
         leverage = pos_data.get("leverage")
         entry_price = parsed_msg.get("entry_price")
@@ -287,112 +280,115 @@ class Core:
         settings_order_type = "limit" if order_type == 1 else "market"
         order_type = "limit" if force_limit else settings_order_type
 
-        record = default_record(
-            symbol=symbol,
-            pos_side=pos_side,
-            leverage=pos_data.get("leverage"),
-            entry_price=pos_data.get("entry_price")
-        )
-        record["symbol"] = symbol
-        record["pos_side"] = pos_side
-        record["leverage"] = leverage
-        record["order_type"] = order_type
-        record["entry_price"] = round(float(entry_price), price_precision)
-        record["entry_status"] = "waiting"
-
-        async with self.context.queues_msg_lock:
-            self.context.order_status_book.setdefault(chat_id, {})[(symbol, pos_side)] = {
-                "message_id": None,  # ещё нет сообщения
-                "last_data": record,
-                "hash": None,
-                "closed": False
-            }
-            current_anchor = self.context.order_status_book.get(chat_id, {}).get((symbol, pos_side))
-
-        take_profits = self.utils.build_take_profits(
-            parsed_msg=parsed_msg,
-            dop_tp=fin_settings.get("dop_tp"),
-            price_precision=price_precision,
-            pos_side=pos_side,
-            entry_price=entry_price
-        )
-        # print("take_profits:")
-        # print(take_profits)
-        if not take_profits:
-            record["tp1_status"] = "Invalid data"
-            record["tp2_status"] = "Invalid data"
-
-        else:
-            risk_sl_ok_status = validate_risk_order(
+        try:
+            record = default_record(
+                symbol=symbol,
                 pos_side=pos_side,
-                cur_price=cur_price,
-                sl=stop_loss,
-                tp=None,
-                epsilon_pct=0.05,
-            ) 
+                leverage=pos_data.get("leverage"),
+                entry_price=pos_data.get("entry_price")
+            )
+            record["symbol"] = symbol
+            record["pos_side"] = pos_side
+            record["leverage"] = leverage
+            record["order_type"] = order_type
+            record["entry_price"] = round(float(entry_price), price_precision)
+            record["entry_status"] = "waiting"
 
-            if risk_sl_ok_status != "ok":
-                record["entry_status"] = risk_sl_ok_status
+            async with self.context.queues_msg_lock:
+                self.context.order_status_book.setdefault(chat_id, {})[(symbol, pos_side)] = {
+                    "message_id": None,  # ещё нет сообщения
+                    "last_data": record,
+                    "hash": None,
+                    "closed": False
+                }
+                current_anchor = self.context.order_status_book.get(chat_id, {}).get((symbol, pos_side))
 
-            for tp_val, vol in take_profits:
-                risk_tp_ok_status = validate_risk_order(
+            take_profits = self.utils.build_take_profits(
+                parsed_msg=parsed_msg,
+                dop_tp=fin_settings.get("dop_tp"),
+                price_precision=price_precision,
+                pos_side=pos_side,
+                entry_price=entry_price
+            )
+            # print("take_profits:")
+            # print(take_profits)
+            if not take_profits:
+                record["tp1_status"] = "Invalid data"
+                record["tp2_status"] = "Invalid data"
+
+            else:
+                risk_sl_ok_status = validate_risk_order(
                     pos_side=pos_side,
                     cur_price=cur_price,
-                    sl=None,
-                    tp=tp_val,
+                    sl=stop_loss,
+                    tp=None,
                     epsilon_pct=0.05,
                 ) 
+
+                if risk_sl_ok_status != "ok":
+                    record["entry_status"] = risk_sl_ok_status
+
+                for tp_val, vol in take_profits:
+                    risk_tp_ok_status = validate_risk_order(
+                        pos_side=pos_side,
+                        cur_price=cur_price,
+                        sl=None,
+                        tp=tp_val,
+                        epsilon_pct=0.05,
+                    ) 
+                    if risk_tp_ok_status != "ok":
+                        break
+                        
                 if risk_tp_ok_status != "ok":
-                    break
-                    
-            if risk_tp_ok_status != "ok":
-                record["entry_status"] = risk_tp_ok_status
+                    record["entry_status"] = risk_tp_ok_status
 
-        if record["entry_status"] != "waiting" or record.get("tp1_status") == "Invalid data":
-            async with self.context.queues_msg_lock:
-                current_anchor["last_data"] = record
+            if record["entry_status"] != "waiting" or record.get("tp1_status") == "Invalid data":
+                async with self.context.queues_msg_lock:
+                    current_anchor["last_data"] = record
 
-            if record and current_anchor:
-                await self.notifier.update_anchor_state(
-                    chat_id=chat_id,
-                    symbol=symbol,
-                    pos_side=pos_side,
-                    body=record,
-                    force_message_id=current_anchor.get("message_id")
-                )
-            return
+                if record and current_anchor:
+                    await self.notifier.update_anchor_state(
+                        chat_id=chat_id,
+                        symbol=symbol,
+                        pos_side=pos_side,
+                        body=record,
+                        force_message_id=current_anchor.get("message_id")
+                    )
+                return
 
-        order_template_response = await self.templates.initial_order_template(
-            session=self.context.session,
-            record=record,
-            current_anchor=current_anchor,
-            chat_id=chat_id,
-            fin_settings=fin_settings,
-            symbol=symbol,
-            leverage=leverage,
-            entry_price=entry_price,
-            pos_side=pos_side,
-            symbol_data=symbol_data,
-            pos_data=pos_data,
-            stop_loss=stop_loss,
-            take_profits=take_profits,
-            order_type=order_type,
-            half_margin=half_margin
-        )
-        
-        if order_type == "limit" and order_template_response:
-            asyncio.create_task(
-                self.complete_until_cancel(
-                    session=self.context.session,
-                    chat_id=chat_id,
-                    fin_settings=fin_settings,
-                    symbol=symbol,
-                    pos_side=pos_side,
-                    pos_data=pos_data,
-                    record=record,
-                    last_timestamp=last_timestamp
-                )
+            order_template_response = await self.templates.initial_order_template(
+                session=self.context.session,
+                record=record,
+                current_anchor=current_anchor,
+                chat_id=chat_id,
+                fin_settings=fin_settings,
+                symbol=symbol,
+                leverage=leverage,
+                entry_price=entry_price,
+                pos_side=pos_side,
+                symbol_data=symbol_data,
+                pos_data=pos_data,
+                stop_loss=stop_loss,
+                take_profits=take_profits,
+                order_type=order_type,
+                half_margin=half_margin
             )
+            
+            if order_type == "limit" and order_template_response:
+                asyncio.create_task(
+                    self.complete_until_cancel(
+                        session=self.context.session,
+                        chat_id=chat_id,
+                        fin_settings=fin_settings,
+                        symbol=symbol,
+                        pos_side=pos_side,
+                        pos_data=pos_data,
+                        record=record,
+                        last_timestamp=last_timestamp
+                    )
+                )
+        finally:
+            pos_data["pending_open"] = False
 
     async def handle_signal(self, chat_id: str, fin_settings: dict, settings_tag: str, parsed_msg: dict, symbol: str, pos_side: str,
                           last_timestamp: int, lock: asyncio.Lock, msg_key: str) -> None:
@@ -493,7 +489,7 @@ class Core:
         while not self.context.stop_bot_iteration and not self.context.stop_bot:
             try:
                 signal_tasks_val = self.context.message_cache[-SIGNAL_PROCESSING_LIMIT:] if self.context.message_cache else None
-                print(signal_tasks_val)
+                # print(signal_tasks_val)
                 if not signal_tasks_val:
                     await asyncio.sleep(MAIN_CYCLE_FREQUENCY)
                     continue
@@ -514,7 +510,7 @@ class Core:
                         continue
                     self.context.tg_timing_cache.add(msg_key)
 
-                    parsed_msg, all_present = self.tg_watcher.parse_tg_message(message=message, tag="matched_tag")
+                    parsed_msg, all_present = self.tg_watcher.parse_tg_message(message=message, tag=matched_tag)
                     print(f"[DEBUG] Parse msg: {parsed_msg}")
                     if not all_present:
                         print(f"[DEBUG] Parse error: {parsed_msg}")
@@ -523,13 +519,28 @@ class Core:
                     symbol = parsed_msg.get("symbol")
                     pos_side = parsed_msg.get("pos_side")
 
+                    # 🧩 1. Собираем смысловой ключ сигнала
+                    sig_key = f"{symbol}|{pos_side}|{parsed_msg.get('entry_price')}|{parsed_msg.get('stop_loss')}|{parsed_msg.get('take_profit1')}|{parsed_msg.get('leverage')}"
+
+                    # 🧩 2. Проверяем TTL дубля (например, 10 секунд)
+                    now_t = time.time()
+                    last_t = self._semantic_seen.get(sig_key, 0)
+                    if now_t - last_t < self._semantic_ttl:
+                        print(f"[DEDUP] Игнорируем дубль сигнала: {sig_key} (прошло {now_t - last_t:.2f}s)")
+                        continue
+                    self._semantic_seen[sig_key] = now_t
+
+                    # 🧩 3. Удаляем старые записи, чтобы словарь не разрастался
+                    if len(self._semantic_seen) > 1000:
+                        cutoff = now_t - self._semantic_ttl
+                        self._semantic_seen = {k: v for k, v in self._semantic_seen.items() if v > cutoff}
+
+                    # Дальше — твой текущий код:
                     if symbol in BLACK_SYMBOLS:
                         continue
 
                     diff_sec = time.time() - (last_timestamp / 1000)
-
                     settings_tag = matched_tag.replace("#", "").lower()
-
                     print(f"[DEBUG] Handling signal for {symbol} {pos_side} with settings_tag: {settings_tag}")
 
                     for num, (chat_id, user_cfg) in enumerate(self.context.users_configs.items(), start=1):
@@ -606,7 +617,6 @@ class Core:
                 notifier=self.notifier
             )
 
-            # ===== Регистрируем все хендлеры =====
             TelegramHandlerRegistry(
                 dp=self.dp,
                 interface=self.tg_interface,
@@ -614,9 +624,9 @@ class Core:
                 tg_watcher=self.tg_watcher
             ).register_all()
 
-            # ===== Запуск Telegram polling =====
-            await self.tg_interface.run()
-            await asyncio.sleep(1) 
+            # ✅ Запускаем polling в отдельной задаче, не блокируя run_forever
+            asyncio.create_task(self.tg_interface.run())
+            await asyncio.sleep(1)
 
         while not self.context.stop_bot:
             if debug: print("[CORE] Новый цикл run_forever, обнуляем флаги итерации")

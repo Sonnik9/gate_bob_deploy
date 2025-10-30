@@ -280,10 +280,21 @@ test_messages = [
 
     лонг
 
-    вход - 107855.2 ; cтоp - 107323.2
+    вход - 107855.2 ; cтоп - 107323.2
     тейк - 108307.5 ; плечо - 80х
 
-    #soft"""
+    #soft""",
+    """trading pair : cro / usdt 
+long x10 
+
+1/2 size
+
+entry price: 0.153
+stop-loss: 0.1433
+
+take profit1: 0.1879
+
+comment so vsyakoy huyney"""
 ]
 
 parser = TgParser()

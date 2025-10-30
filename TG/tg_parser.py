@@ -5,22 +5,23 @@ from typing import *
 import re
 from typing import Optional, Tuple, Set
 from aiogram import Dispatcher, types, F
+import hashlib
 
 
 # Базовый словарь: пара символов (латиница, кириллица)
-CHAR_PAIRS = {
-    # нижний регистр
-    "a": "а", "e": "е", "o": "о", "p": "р", "c": "с", "y": "у", "x": "х",
-    # верхний регистр
-    "A": "А", "B": "В", "E": "Е", "K": "К", "M": "М", "H": "Н", "O": "О",
-    "P": "Р", "C": "С", "T": "Т", "X": "Х",
-}
-
 # CHAR_PAIRS = {
+#     # нижний регистр
 #     "a": "а", "e": "е", "o": "о", "p": "р", "c": "с", "y": "у", "x": "х",
+#     # верхний регистр
 #     "A": "А", "B": "В", "E": "Е", "K": "К", "M": "М", "H": "Н", "O": "О",
 #     "P": "Р", "C": "С", "T": "Т", "X": "Х",
 # }
+
+CHAR_PAIRS = {
+    "a": "а", "e": "е", "o": "о", "p": "р", "c": "с", "y": "у", "x": "х",
+    "A": "А", "B": "В", "E": "Е", "K": "К", "M": "М", "H": "Н", "O": "О",
+    "P": "Р", "C": "С", "T": "Т", "X": "Х",
+}
 
 
 LATIN_TO_CYR = CHAR_PAIRS
@@ -104,7 +105,7 @@ class TgParser:
         #  ВЕТКА #SOFT
         # ===============================================================
         if tag == "#soft":
-            print("soft")
+            # print("soft")
 
             # символ (ищем по $)
             if lines:
@@ -246,15 +247,10 @@ class TgBotWatcherAiogram(TgParser):
                     return
 
                 msg_text = msg_text.lower()
-                
-                # --- Можно очистить текст от мусора, если нужно ---
-                # msg_text = re.sub(r"[^\w\s#]", " ", msg_text)
-                msg_text = re.sub(r"[^\w\s.,:/\-#+]", " ", msg_text)
-                print(msg_text)
 
                 # --- Поиск подходящего тега ---
                 matched_tag = next((tag for tag in self.tags_set if tag in msg_text), None)
-                print(matched_tag)
+                # print(matched_tag)
                 if not matched_tag:
                     return
 

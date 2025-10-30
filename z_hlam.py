@@ -258,3 +258,105 @@
 
     #         except Exception as e:
     #             self.info_handler.debug_error_notes(f"[watch_channel error] {e}", is_print=True)
+
+
+
+
+
+                    # parsed_msg, all_present = self.tg_watcher.parse_tg_message(message=message, tag=matched_tag)
+                    # print(f"[DEBUG] Parse msg: {parsed_msg}")
+                    # if not all_present:
+                    #     print(f"[DEBUG] Parse error: {parsed_msg}")
+                    #     continue
+
+                    # symbol = parsed_msg.get("symbol")
+                    # pos_side = parsed_msg.get("pos_side")
+
+                    # if symbol in BLACK_SYMBOLS:
+                    #     continue
+
+                    # diff_sec = time.time() - (last_timestamp / 1000)
+
+                    # settings_tag = matched_tag.replace("#", "").lower()
+
+                    # print(f"[DEBUG] Handling signal for {symbol} {pos_side} with settings_tag: {settings_tag}")
+
+
+
+
+    # def register_all(self):
+    #     # ===== 1. Сначала watcher канала =====
+    #     self.tg_watcher.register_handlers()
+
+    #     # ===== 2. Специфичные хендлеры интерфейса =====
+    #     self.interface.register_handlers()
+
+    #     # ===== 3. Глобальный handler Notifier =====
+    #     self.notifier.register_handlers()
+
+
+                
+                # --- Можно очистить текст от мусора, если нужно ---
+                # msg_text = re.sub(r"[^\w\s#]", " ", msg_text)
+                # msg_text = re.sub(r"[^\w\s.,:/\-#+]", " ", msg_text)
+                # print(msg_text)
+
+
+
+
+
+    # def register_handlers(self):
+    #     """
+    #     Регистрирует все channel_post обработчики через Dispatcher.
+    #     """
+    #     @self.dp.channel_post()
+    #     async def channel_post_handler(message: types.Message):
+    #         try:
+    #             # --- Извлекаем текст из сообщения или подписи ---
+    #             msg_text = message.text or message.caption
+    #             if not msg_text:
+    #                 print(f"Нет текста (возможно только фото/видео). {log_time()}")
+    #                 return
+
+    #             # --- Очищаем от мусора, не трогая регистр и кириллицу ---
+    #             # msg_text = re.sub(r"[^\w\s.,:/\-#+]", " ", msg_text)
+    #             msg_text = msg_text.strip()
+
+    #             print(f"[DEBUG][RAW TG MESSAGE]\n{msg_text}")
+
+    #             # --- Поиск подходящего тега ---
+    #             # сравнение в lower, но сам текст не портим
+    #             matched_tag = next(
+    #                 (tag for tag in self.tags_set if tag in msg_text.lower()), None
+    #             )
+    #             if not matched_tag:
+    #                 print("[DEBUG] Нет совпавшего тега, сообщение пропущено")
+    #                 return
+
+    #             # --- Генерация уникального ключа для защиты от дублей ---
+    #             ts_ms = int(message.date.timestamp() * 1000)
+    #             msg_hash = hashlib.md5(msg_text.encode()).hexdigest()
+    #             unique_key = f"{ts_ms}_{msg_hash}"
+
+    #             if unique_key in self._seen_messages:
+    #                 print(f"[DEBUG] Повтор сообщения, пропускаем ({unique_key})")
+    #                 return
+
+    #             self._seen_messages.add(unique_key)
+    #             self.message_cache.append((matched_tag, msg_text, ts_ms))
+
+    #             # --- Безопасная очистка кэша ---
+    #             if len(self._seen_messages) > self.max_cache * 2:
+    #                 self._seen_messages = set(list(self._seen_messages)[-self.max_cache:])
+    #             if len(self.message_cache) > self.max_cache:
+    #                 self.message_cache = self.message_cache[-self.max_cache:]
+
+    #             print(
+    #                 f"[DEBUG] Новое сообщение сохранено в кэш: "
+    #                 f"tag={matched_tag}, ts={ts_ms}, hash={msg_hash[:8]}"
+    #             )
+
+    #         except Exception as e:
+    #             self.info_handler.debug_error_notes(
+    #                 f"[watch_channel error] {e}", is_print=True
+    #             )
