@@ -1,7 +1,7 @@
 from typing import *
 
 # --- CORE ---
-TEG_ANCHOR_SET: Set = {"#soft", "trading pair", } # --------------------------  # теги целевых сообщений. СТАТИКА
+TEG_ANCHOR_SET: Set = {"#soft", "trading pair", "upd"} # --------------------------  # теги целевых сообщений. СТАТИКА
 
 # --- SECRETS CONFIG ---                 
 # TG_BOT_TOKEN: str = "8190920390:AAE09pWhSVguG0iiBNIztM2Pe8zECPV4vSg" # токен тг бота old fin klient

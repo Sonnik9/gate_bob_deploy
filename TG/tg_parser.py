@@ -8,15 +8,6 @@ from aiogram import Dispatcher, types, F
 import hashlib
 
 
-# Базовый словарь: пара символов (латиница, кириллица)
-# CHAR_PAIRS = {
-#     # нижний регистр
-#     "a": "а", "e": "е", "o": "о", "p": "р", "c": "с", "y": "у", "x": "х",
-#     # верхний регистр
-#     "A": "А", "B": "В", "E": "Е", "K": "К", "M": "М", "H": "Н", "O": "О",
-#     "P": "Р", "C": "С", "T": "Т", "X": "Х",
-# }
-
 CHAR_PAIRS = {
     "a": "а", "e": "е", "o": "о", "p": "р", "c": "с", "y": "у", "x": "х",
     "A": "А", "B": "В", "E": "Е", "K": "К", "M": "М", "H": "Н", "O": "О",
@@ -36,7 +27,8 @@ class TgParser:
     @staticmethod
     def clean_whitespace(text: str) -> str:
         """Удаляет лишние пробелы"""
-        return " ".join(word.strip() for word in text.split())
+        # return " ".join(word.strip() for word in text.split())
+        return "\n".join(line.strip() for line in text.split("\n"))
 
     @staticmethod
     def cyr_to_latin(text: str) -> str:
@@ -48,6 +40,33 @@ class TgParser:
         """Латиницу в кириллицу"""
         text = "".join(LATIN_TO_CYR.get(ch, ch) for ch in text)
         return text.lower().replace(",", ".")
+        
+    # @staticmethod
+    # def clean_number(num_str: str) -> float | None:
+    #     if not num_str:
+    #         return None
+
+    #     s = num_str.replace(" ", "").strip()
+
+    #     # Последний разделитель (дробная часть)
+    #     last_sep = max(s.rfind("."), s.rfind(","))
+
+    #     if last_sep == -1:
+    #         return float(re.sub(r"[^\d]", "", s))
+
+    #     int_part = s[:last_sep]
+    #     frac_part = s[last_sep+1:]
+
+    #     int_part = re.sub(r"[^\d]", "", int_part)
+    #     frac_part = re.sub(r"[^\d]", "", frac_part)
+
+    #     if not int_part:
+    #         int_part = "0"
+
+    #     if not frac_part:
+    #         return float(int_part)
+
+    #     return float(f"{int_part}.{frac_part}")
 
     @staticmethod
     def clean_number(num_str: str) -> float:
@@ -76,6 +95,12 @@ class TgParser:
                 tag = "#soft"
             elif "trading pair" in raw_lower:
                 tag = "trading pair"
+            elif "upd" in raw_lower:
+                tag = "upd"
+
+        if not tag:
+            print("not tag")
+            return {}, False
 
         # --- Очистка мусора, но сохраняем кириллицу и # ---
         message = self.clean_whitespace(message.strip())
@@ -89,24 +114,66 @@ class TgParser:
         lines = [l.strip() for l in text.split("\n") if l.strip()]
         text_joined = " ".join(lines)
 
-        result = {
-            "symbol": "",
-            "pos_side": None,
-            "entry_price": None,
-            "stop_loss": None,
-            "take_profit1": None,
-            "take_profit2": None,
-            "leverage": None,
-            "force_limit": False,
-            "half_margin": False,
-        }
+        if tag in ("#soft", "trading pair"):
+            result = {
+                "symbol": "",
+                "pos_side": None,
+                "entry_price": None,
+                "stop_loss": None,
+                "take_profit1": None,
+                "take_profit2": None,
+                "leverage": None,
+                "force_limit": False,
+                "half_margin": False,
+            }
+            mandatory = ["symbol", "pos_side", "entry_price", "stop_loss", "take_profit1", "leverage"]
+
+        elif tag == "upd":
+            result = {
+                "symbol": "",
+                "upd_tp": None,
+                "upd_sl": None,   # сюда и BE, и число — дальше сам разберёшь
+                # "pos_side": None,
+            }
+            mandatory = ["symbol"]
+
+        # ===============================================================
+        #                       NEW: UPD BRANCH
+        # ===============================================================
+        if tag == "upd":
+            # ---- 1) SYMBOL ----
+            for line in lines:
+                m_pair = re.search(r"upd\s*[:\- ]*\s*([A-Za-z0-9/_-]+)", line, re.IGNORECASE)
+                if m_pair:
+                    result["symbol"] = m_pair.group(1)
+                    break
+
+            # ---- 2) NEW TP ----
+            for line in lines:
+                if "new" in line.lower() and "tp" in line.lower():
+                    m_tp = re.search(r"new\s*tp\s*[: ]*(.*)", line, re.IGNORECASE)
+                    if m_tp:
+                        val = m_tp.group(1).strip()
+                        if val:  
+                            result["upd_tp"] = self.clean_number(val)
+                    break
+
+            # ---- 3) NEW SL ----
+            for line in lines:
+                if "new" in line.lower() and "sl" in line.lower():
+                    m_sl = re.search(r"new\s*sl\s*[: ]*(.*)", line, re.IGNORECASE)
+                    if m_sl:
+                        val = m_sl.group(1).strip().upper()
+                        if val == "BE":
+                            result["upd_sl"] = "BE"
+                        elif val:
+                            result["upd_sl"] = self.clean_number(val)
+                    break
 
         # ===============================================================
         #  ВЕТКА #SOFT
         # ===============================================================
-        if tag == "#soft":
-            # print("soft")
-
+        elif tag == "#soft":
             # символ (ищем по $)
             if lines:
                 m_symbol = re.search(r"\$([а-яa-z0-9]+)", lines[0], re.IGNORECASE)
@@ -202,11 +269,10 @@ class TgParser:
         if not base_symbol:
             return {}, False
         result["symbol"] = base_symbol.replace("USDT", "").replace("_", "").replace("-", "") + "_USDT"
-
-        mandatory = ["symbol", "pos_side", "entry_price", "stop_loss", "take_profit1", "leverage"]
+        
         ok = all(result[k] for k in mandatory)
         return result, ok
-
+      
 
 class TgBotWatcherAiogram(TgParser):
     """
